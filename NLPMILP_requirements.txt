@@ -9,7 +9,6 @@ async-generator==1.10
 async-lru==2.0.4
 attrs==24.3.0
 babel==2.16.0
-batchspawner @ git+https://github.com/jupyterhub/batchspawner.git@87874004b2dc761598405a564a26e5f6775bb473
 beautifulsoup4==4.12.3
 bleach==6.2.0
 certifi==2024.12.14

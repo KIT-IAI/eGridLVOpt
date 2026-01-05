@@ -4,11 +4,12 @@
 
 [![Python](https://img.shields.io/badge/Python-3.9.18-blue?logo=python)](https://www.python.org/downloads/release/python-3918/)
 [![License](https://img.shields.io/badge/License-MIT-green?logo=opensource)](./LICENSE)
-[![Flake8](https://img.shields.io/badge/Linting-Flake8-blueviolet?logo=python)](https://flake8.pycqa.org/)
+[![Code Style](https://img.shields.io/badge/Code%20Style-black-000000.svg?logo=python)](https://github.com/psf/black)
+[![DOI](https://img.shields.io/badge/DOI-10.1109%2FSEGE65970.2025.11203658-orange?logo=doi)](https://doi.org/10.1109/SEGE65970.2025.11203658)
 
 <h1 align="center">Linear and Nonlinear Model Predictive Control for Distributed Energy Resources in Power Grids</h1>
 
-**⚠️ Note**: _Last update on 09.07.2025_
+**⚠️ Note**: _Last update on 05.01.2026_
 
 <div align="left"> This repository is the official code of the paper <strong>"Linear and Nonlinear Model Predictive Control for Distributed Energy Resources in Power Grids"</strong>, featuring a low-voltage grid simulation environment with control of photovoltaic (PV) inverters, battery energy storage systems (BES), and heat pumps (HP). It includes several generation and load profiles, dynamic EPEX spot market prices, and tools for evaluating linear and nonlinear MPC control strategies. </div>
 
@@ -120,13 +121,14 @@ python __main__.py \
 If you use this framework in your research, please consider citing our paper &#128221; and giving the repository a star &#11088;:
 </p>
 
-```bibTeX
+```bibtex
 @inproceedings{Demirel2025,
       title={Linear and Nonlinear Model Predictive Control for Distributed Energy Resources in Power Grids},
       author={Demirel, Gökhan and Mu, Xuanhao and Sari, Tolgahan and De Carne, Giovanni and Förderer, Kevin and Hagenmeyer, Veit},
       year={2025},
-      booktitle={2025 IEEE 13th International Conference on Smart Energy Grid Engineering (SEGE)},
-      pages={1--7}
+      booktitle={2025 IEEE 13th International Conference on Smart Energy Grid Engineering (SEGE)}, 
+      pages={213-219},
+      doi={10.1109/SEGE65970.2025.11203658}
 }
 ```
 

@@ -10,6 +10,7 @@ import simbench as sb
 import copy
 
 from ortools.linear_solver import pywraplp
+
 # Local modules
 from nonlinear_model import NonLinearModel
 
@@ -38,10 +39,19 @@ class HumanPreference:
     solving_method : str
         Method type (e.g., "model_predictive").
     """
-    def __init__(self, horizon_length=96, omega_1=0.5, omega_2=0.5,
-                 pywraplp_solver="CBC", initial_soc_solver=50,
-                 target_soc_solver=0, initial_soc_sim=50,
-                 noise_percent=1, solving_method="model_predictive"):
+
+    def __init__(
+        self,
+        horizon_length=96,
+        omega_1=0.5,
+        omega_2=0.5,
+        pywraplp_solver="CBC",
+        initial_soc_solver=50,
+        target_soc_solver=0,
+        initial_soc_sim=50,
+        noise_percent=1,
+        solving_method="model_predictive",
+    ):
         self.horizon_length = horizon_length
         self.omega_1 = omega_1
         self.omega_2 = omega_2
@@ -57,6 +67,7 @@ class solver_library(Enum):
     """
     Enum for selecting the solver backend.
     """
+
     pyomo = "pyomo"
     pywraplp = "pywraplp"
 
@@ -64,17 +75,19 @@ class solver_library(Enum):
 class manager_solver:
     # Class to manage grid simulation and optimization using pyomo or pywraplp
 
-    def __init__(self,
-                 solver_library: solver_library = solver_library.pywraplp,
-                 net=None,
-                 simulation_step_start=0,
-                 simulation_steps=96,
-                 energy_prices=None,
-                 control_heatpump=True,
-                 human_preference=None,
-                 transformer_limit_enabled=False,
-                 transformer_limit_percentage=100,
-                 energy_price_year=2024):
+    def __init__(
+        self,
+        solver_library: solver_library = solver_library.pywraplp,
+        net=None,
+        simulation_step_start=0,
+        simulation_steps=96,
+        energy_prices=None,
+        control_heatpump=True,
+        human_preference=None,
+        transformer_limit_enabled=False,
+        transformer_limit_percentage=100,
+        energy_price_year=2024,
+    ):
         # Create new instance
         if net is None:
             self.create_sample_net()
@@ -100,8 +113,8 @@ class manager_solver:
         self.transformer_limit_percentage = transformer_limit_percentage
 
         self.profiles = sb.get_absolute_values(
-            self.net,
-            profiles_instead_of_study_cases=True)
+            self.net, profiles_instead_of_study_cases=True
+        )
 
         self.profiles_load_p = self.profiles[("load", "p_mw")]
         self.profiles_load_q = self.profiles[("load", "q_mvar")]
@@ -111,20 +124,21 @@ class manager_solver:
         # Simulate grid without storage to get power exchange and energy cost
         print("Simulating network to create scalers... ", end="")
         self.net_temp = pp.pandapowerNet(self.net)
-        self.temp_net_sum_p_mw = np.empty(shape=self.simulation_steps,
-                                          dtype=float)
-        self.temp_money_spend = np.empty(shape=self.simulation_steps,
-                                         dtype=float)
+        self.temp_net_sum_p_mw = np.empty(shape=self.simulation_steps, dtype=float)
+        self.temp_money_spend = np.empty(shape=self.simulation_steps, dtype=float)
         for step_temp in range(self.simulation_steps):
             step_global_temp = self.step_global + step_temp
             for i in self.net_temp.load.index:
                 self.net_temp.load["p_mw"][i] = self.profiles_load_p[i][
-                    step_global_temp]
+                    step_global_temp
+                ]
                 self.net_temp.load["q_mvar"][i] = self.profiles_load_q[i][
-                    step_global_temp]
+                    step_global_temp
+                ]
             for i in self.net_temp.sgen.index:
                 self.net_temp.sgen["p_mw"][i] = self.profiles_sgen_p[i][
-                    step_global_temp]
+                    step_global_temp
+                ]
             for i in self.net_temp.storage.index:
                 self.net_temp.storage["p_mw"][i] = 0
 
@@ -141,8 +155,10 @@ class manager_solver:
             self.temp_money_spend[step_temp] = (
                 self.temp_net_sum_p_mw[step_temp]
                 * self.inp_energy_prices[step_global_temp]
-                * 1000 * 15 / 60
-                )
+                * 1000
+                * 15
+                / 60
+            )
 
         # Create min max scaler for the power exchange and energy expenditures
         self.temp_money_spend_std = np.std(self.temp_money_spend)
@@ -152,7 +168,7 @@ class manager_solver:
         print("Finish")
 
         print("Adding noise to profiles")
-        self.noise_factor = human_preference.noise_percent/100
+        self.noise_factor = human_preference.noise_percent / 100
         self.prediction_profiles_load_p_noisy = (
             self.profiles_load_p.copy().to_numpy().transpose()
         )
@@ -164,21 +180,55 @@ class manager_solver:
         )
 
         for i in self.net.load.index:
-            self.prediction_profiles_load_p_noisy[i] += np.random.normal(0, np.std(self.prediction_profiles_load_p_noisy[i])*self.noise_factor, self.prediction_profiles_load_p_noisy[i].shape)
-            self.prediction_profiles_load_q_noisy[i] += np.random.normal(0, np.std(self.prediction_profiles_load_q_noisy[i])*self.noise_factor, self.prediction_profiles_load_q_noisy[i].shape)
-            self.prediction_profiles_load_p_noisy[i] = np.max([self.prediction_profiles_load_p_noisy[i], np.zeros(self.prediction_profiles_load_p_noisy[i].shape)], axis=0)
-            self.prediction_profiles_load_q_noisy[i] = np.max([self.prediction_profiles_load_q_noisy[i], np.zeros(self.prediction_profiles_load_q_noisy[i].shape)], axis=0)
+            self.prediction_profiles_load_p_noisy[i] += np.random.normal(
+                0,
+                np.std(self.prediction_profiles_load_p_noisy[i]) * self.noise_factor,
+                self.prediction_profiles_load_p_noisy[i].shape,
+            )
+            self.prediction_profiles_load_q_noisy[i] += np.random.normal(
+                0,
+                np.std(self.prediction_profiles_load_q_noisy[i]) * self.noise_factor,
+                self.prediction_profiles_load_q_noisy[i].shape,
+            )
+            self.prediction_profiles_load_p_noisy[i] = np.max(
+                [
+                    self.prediction_profiles_load_p_noisy[i],
+                    np.zeros(self.prediction_profiles_load_p_noisy[i].shape),
+                ],
+                axis=0,
+            )
+            self.prediction_profiles_load_q_noisy[i] = np.max(
+                [
+                    self.prediction_profiles_load_q_noisy[i],
+                    np.zeros(self.prediction_profiles_load_q_noisy[i].shape),
+                ],
+                axis=0,
+            )
 
         for i in self.net.sgen.index:
-            self.prediction_profiles_sgen_p_noisy[i] += np.random.normal(0, np.std(self.prediction_profiles_sgen_p_noisy[i])*self.noise_factor, self.prediction_profiles_sgen_p_noisy[i].shape)
-            self.prediction_profiles_sgen_p_noisy[i] = np.max([self.prediction_profiles_sgen_p_noisy[i], np.zeros(self.prediction_profiles_sgen_p_noisy[i].shape)], axis=0)
+            self.prediction_profiles_sgen_p_noisy[i] += np.random.normal(
+                0,
+                np.std(self.prediction_profiles_sgen_p_noisy[i]) * self.noise_factor,
+                self.prediction_profiles_sgen_p_noisy[i].shape,
+            )
+            self.prediction_profiles_sgen_p_noisy[i] = np.max(
+                [
+                    self.prediction_profiles_sgen_p_noisy[i],
+                    np.zeros(self.prediction_profiles_sgen_p_noisy[i].shape),
+                ],
+                axis=0,
+            )
 
-        self.prediction_energy_prices_noisy = self.inp_energy_prices + np.random.normal(0, np.std(self.inp_energy_prices)*self.noise_factor, self.inp_energy_prices.shape)
+        self.prediction_energy_prices_noisy = self.inp_energy_prices + np.random.normal(
+            0,
+            np.std(self.inp_energy_prices) * self.noise_factor,
+            self.inp_energy_prices.shape,
+        )
 
         # Set solver library
         self.solver_library = solver_library
         self.horizon_length = human_preference.horizon_length
-        self.net.ext_grid['vm_pu'] = 1
+        self.net.ext_grid["vm_pu"] = 1
 
         self.initial_soc_sim = human_preference.initial_soc_sim
         # Weight 1 for selecting objective function
@@ -211,26 +261,39 @@ class manager_solver:
             # Apply line constraint relaxation to ensure NLP feasibility
             print("Simulating network for line current calculation")
             net_copy = copy.deepcopy(self.net)
-            for step_net_copy in range(self.simulation_step_start, self.simulation_step_start + self.simulation_steps):
+            for step_net_copy in range(
+                self.simulation_step_start,
+                self.simulation_step_start + self.simulation_steps,
+            ):
                 for i in self.net.load.index:
                     net_copy.load["p_mw"][i] = self.profiles_load_p[i][step_net_copy]
                     net_copy.load["q_mvar"][i] = self.profiles_load_q[i][step_net_copy]
                 for i in self.net.sgen.index:
                     net_copy.sgen["p_mw"][i] = self.profiles_sgen_p[i][step_net_copy]
                 for i in self.net.storage.index:
-                    net_copy.storage["p_mw"][i] = self.profiles_storage[i][step_net_copy]
+                    net_copy.storage["p_mw"][i] = self.profiles_storage[i][
+                        step_net_copy
+                    ]
                 pp.runpp(net_copy)
-                i_ka[:, step_net_copy-self.simulation_step_start] = net_copy.res_line["i_ka"].values
-                trafo_loading[:, step_net_copy-self.simulation_step_start] = net_copy.res_trafo["loading_percent"].values
+                i_ka[:, step_net_copy - self.simulation_step_start] = net_copy.res_line[
+                    "i_ka"
+                ].values
+                trafo_loading[:, step_net_copy - self.simulation_step_start] = (
+                    net_copy.res_trafo["loading_percent"].values
+                )
 
             max_i_ka = i_ka.max(axis=1)
             for i in self.net.line.index:
-                self.net.line["max_i_ka"][i] = np.max([max_i_ka[i], self.net.line["max_i_ka"][i]])
+                self.net.line["max_i_ka"][i] = np.max(
+                    [max_i_ka[i], self.net.line["max_i_ka"][i]]
+                )
             # Find all lines that are connected to the transformer
-            hv_bus = self.net.trafo.at[0, 'hv_bus']
-            lv_bus = self.net.trafo.at[0, 'lv_bus']
-            self.connected_lines = self.net.line[(self.net.line['from_bus'].isin([hv_bus, lv_bus])) |
-                                                 (self.net.line['to_bus'].isin([hv_bus, lv_bus]))].index
+            hv_bus = self.net.trafo.at[0, "hv_bus"]
+            lv_bus = self.net.trafo.at[0, "lv_bus"]
+            self.connected_lines = self.net.line[
+                (self.net.line["from_bus"].isin([hv_bus, lv_bus]))
+                | (self.net.line["to_bus"].isin([hv_bus, lv_bus]))
+            ].index
             # Line capacity limit: 1.05 = 105% for all lines that are connected to the trafo
             self.connected_lines_cap = 1.05
             for i in self.connected_lines:
@@ -241,24 +304,26 @@ class manager_solver:
                 flow_constraint = "both"
             else:
                 flow_constraint = "current"
-            self.model = NonLinearModel(self.net,
-                                        flow_constraint=flow_constraint,
-                                        solver="ipopt",
-                                        v_min=0.9,
-                                        v_max=1.1,
-                                        H=self.horizon_length,
-                                        H_all=simulation_steps,
-                                        dt_min=15,
-                                        objective="pywraplp_multiobjective_power_price",
-                                        solver_options={'verbose': True, 'tee': False},
-                                        timestep_start=simulation_step_start,
-                                        omega_1=self.omega_1,
-                                        omega_2=self.omega_2,
-                                        temp_money_spend_std=self.temp_money_spend_std,
-                                        temp_money_spend_mean=self.temp_money_spend_mean,
-                                        temp_net_sum_p_mw_mean=self.temp_net_sum_p_mw_mean,
-                                        temp_net_sum_p_mw_std=self.temp_net_sum_p_mw_std,
-                                        trafo_limit_percent=self.transformer_limit_percentage)
+            self.model = NonLinearModel(
+                self.net,
+                flow_constraint=flow_constraint,
+                solver="ipopt",
+                v_min=0.9,
+                v_max=1.1,
+                H=self.horizon_length,
+                H_all=simulation_steps,
+                dt_min=15,
+                objective="pywraplp_multiobjective_power_price",
+                solver_options={"verbose": True, "tee": False},
+                timestep_start=simulation_step_start,
+                omega_1=self.omega_1,
+                omega_2=self.omega_2,
+                temp_money_spend_std=self.temp_money_spend_std,
+                temp_money_spend_mean=self.temp_money_spend_mean,
+                temp_net_sum_p_mw_mean=self.temp_net_sum_p_mw_mean,
+                temp_net_sum_p_mw_std=self.temp_net_sum_p_mw_std,
+                trafo_limit_percent=self.transformer_limit_percentage,
+            )
             self.mins = []
             self.maxs = []
             self.means = []
@@ -294,24 +359,40 @@ class manager_solver:
         # Battery drain loss
         self.nue = 0.001
 
-        self.out_battery_p_mw = np.empty((len(self.net.storage.index), self.simulation_steps), dtype=float)
-        self.out_battery_soc = np.empty((len(self.net.storage.index), self.simulation_steps), dtype=float)
-        self.out_pv_p_mw = np.empty((len(self.net.sgen.index), self.simulation_steps), dtype=float)
-        self.out_load_p_mw = np.empty((len(self.net.load.index), self.simulation_steps), dtype=float)
+        self.out_battery_p_mw = np.empty(
+            (len(self.net.storage.index), self.simulation_steps), dtype=float
+        )
+        self.out_battery_soc = np.empty(
+            (len(self.net.storage.index), self.simulation_steps), dtype=float
+        )
+        self.out_pv_p_mw = np.empty(
+            (len(self.net.sgen.index), self.simulation_steps), dtype=float
+        )
+        self.out_load_p_mw = np.empty(
+            (len(self.net.load.index), self.simulation_steps), dtype=float
+        )
         self.out_bus_m_p_mw = np.empty(shape=self.simulation_steps, dtype=float)
-        self.out_bus_p_mw = np.empty((len(self.net.bus.index), self.simulation_steps), dtype=float)
+        self.out_bus_p_mw = np.empty(
+            (len(self.net.bus.index), self.simulation_steps), dtype=float
+        )
         self.out_net_sum_p_mw = np.empty(shape=self.simulation_steps, dtype=float)
         self.out_energy_prices = np.empty(shape=self.simulation_steps, dtype=float)
         self.out_money_spend = np.empty(shape=self.simulation_steps, dtype=float)
         self.out_money_spend_sum = np.empty(shape=self.simulation_steps, dtype=float)
-        self.out_res_trafo_loading_percent = np.empty(shape=self.simulation_steps, dtype=float)
+        self.out_res_trafo_loading_percent = np.empty(
+            shape=self.simulation_steps, dtype=float
+        )
         self.out_res_trafo_p_hv_mw = np.empty(shape=self.simulation_steps, dtype=float)
         self.out_res_trafo_p_lv_mw = np.empty(shape=self.simulation_steps, dtype=float)
-        self.out_res_bus_vm_pu = np.empty((len(self.net.bus.index), self.simulation_steps), dtype=float)
-        self.out_res_line_loading = np.empty((len(self.net.line.index), self.simulation_steps), dtype=float)
+        self.out_res_bus_vm_pu = np.empty(
+            (len(self.net.bus.index), self.simulation_steps), dtype=float
+        )
+        self.out_res_line_loading = np.empty(
+            (len(self.net.line.index), self.simulation_steps), dtype=float
+        )
 
         self.id_res_bus = 0
-        self.index_hp = np.where(net.load.profile.str.startswith(('Soil', 'Air')))[0]
+        self.index_hp = np.where(net.load.profile.str.startswith(("Soil", "Air")))[0]
         self.max_p_mw_hp = {}
         for i in self.index_hp:
             self.max_p_mw_hp[i] = max(self.profiles_load_p[i])
@@ -337,13 +418,24 @@ class manager_solver:
 
         self.out_bus_m_p_mw[self.step] = self.net.res_bus.p_mw[self.id_res_bus]
         self.out_energy_prices[self.step] = self.inp_energy_prices[self.step_global]
-        self.out_money_spend[self.step] = -self.net.res_bus.p_mw[self.id_res_bus] * self.out_energy_prices[self.step] * 1000 * 15 / 60
+        self.out_money_spend[self.step] = (
+            -self.net.res_bus.p_mw[self.id_res_bus]
+            * self.out_energy_prices[self.step]
+            * 1000
+            * 15
+            / 60
+        )
         if self.step >= 1:
-            self.out_money_spend_sum[self.step] = self.out_money_spend_sum[self.step-1] + self.out_money_spend[self.step]
+            self.out_money_spend_sum[self.step] = (
+                self.out_money_spend_sum[self.step - 1]
+                + self.out_money_spend[self.step]
+            )
         else:
             self.out_money_spend_sum[0] = self.out_money_spend[0]
 
-        self.out_res_trafo_loading_percent[self.step] = self.net.res_trafo.loading_percent[0]
+        self.out_res_trafo_loading_percent[self.step] = (
+            self.net.res_trafo.loading_percent[0]
+        )
         self.out_res_trafo_p_hv_mw[self.step] = self.net.res_trafo.p_hv_mw[0]
         self.out_res_trafo_p_lv_mw[self.step] = self.net.res_trafo.p_lv_mw[0]
 
@@ -359,7 +451,9 @@ class manager_solver:
             self.out_net_sum_p_mw[self.step] -= self.net.sgen.p_mw[i]
 
         for i in self.net.line.index:
-            self.out_res_line_loading[i][self.step] = self.net.res_line.loading_percent[i]
+            self.out_res_line_loading[i][self.step] = self.net.res_line.loading_percent[
+                i
+            ]
 
         print(self.step)
 
@@ -369,7 +463,11 @@ class manager_solver:
         if self.solver_library == solver_library.pywraplp:
             # Update battery SOC
             for i in self.net.storage.index:
-                self.net.storage.soc_percent[i] = self.next_soc(self.net.storage.soc_percent[i], self.net.storage.p_mw[i], self.net.storage.max_e_mwh[i])
+                self.net.storage.soc_percent[i] = self.next_soc(
+                    self.net.storage.soc_percent[i],
+                    self.net.storage.p_mw[i],
+                    self.net.storage.max_e_mwh[i],
+                )
 
         # Load
         for i in self.net.load.index:
@@ -413,8 +511,10 @@ class manager_solver:
                 # self.i_Auslastung_maxs.append(i_Auslastung.max())
                 # self.i_Auslastung_mins.append(i_Auslastung.min())
                 # self.i_Auslastung_pyomo_voll.append(i_Auslastung)
-                self.Pstos.append(res_bus['P_sto'][:, 0])
-                self.soc_opt.append(res_bus['E_sto'][:, 0]/self.net.storage['max_e_mwh'].values*100)
+                self.Pstos.append(res_bus["P_sto"][:, 0])
+                self.soc_opt.append(
+                    res_bus["E_sto"][:, 0] / self.net.storage["max_e_mwh"].values * 100
+                )
                 self.model.update_storages()
                 self.model.clear_model()
 
@@ -452,11 +552,15 @@ class manager_solver:
                     self.model.p_hp_history[i].append(0)
                 # if False and solver_condition == "infeasible": # potential error handling
                 for i in self.net.storage.index:
-                    self.net.storage.soc_percent[i] = self.next_soc(self.net.storage.soc_percent[i], self.net.storage.p_mw[i], self.net.storage.max_e_mwh[i])
-                    if self.net.storage.soc_percent[i] > 100.:
-                        self.net.storage.soc_percent[i] = 100.
-                    elif self.net.storage.soc_percent[i] < 0.:
-                        self.net.storage.soc_percent[i] = 0.
+                    self.net.storage.soc_percent[i] = self.next_soc(
+                        self.net.storage.soc_percent[i],
+                        self.net.storage.p_mw[i],
+                        self.net.storage.max_e_mwh[i],
+                    )
+                    if self.net.storage.soc_percent[i] > 100.0:
+                        self.net.storage.soc_percent[i] = 100.0
+                    elif self.net.storage.soc_percent[i] < 0.0:
+                        self.net.storage.soc_percent[i] = 0.0
                     self.net.storage.p_mw[i] = 0
                 for i in self.index_hp:
                     self.net.load.p_mw[i] = 0
@@ -474,21 +578,43 @@ class manager_solver:
 
             # Cap Battery p_mw to not go below 0% or above 100% SoC
             for i in self.net.storage.index:
-                if self.next_soc(self.net.storage.soc_percent[i], self.net.storage.p_mw[i], self.net.storage.max_e_mwh[i]) > 100.:
-                    self.net.storage.p_mw[i] = self.max_p_mw_for_100_soc(self.net.storage.soc_percent[i], self.net.storage.max_e_mwh[i])
-                elif self.next_soc(self.net.storage.soc_percent[i], self.net.storage.p_mw[i], self.net.storage.max_e_mwh[i]) < 0.:
-                    self.net.storage.p_mw[i] = self.min_p_mw_for_0_soc(self.net.storage.soc_percent[i], self.net.storage.max_e_mwh[i])
+                if (
+                    self.next_soc(
+                        self.net.storage.soc_percent[i],
+                        self.net.storage.p_mw[i],
+                        self.net.storage.max_e_mwh[i],
+                    )
+                    > 100.0
+                ):
+                    self.net.storage.p_mw[i] = self.max_p_mw_for_100_soc(
+                        self.net.storage.soc_percent[i], self.net.storage.max_e_mwh[i]
+                    )
+                elif (
+                    self.next_soc(
+                        self.net.storage.soc_percent[i],
+                        self.net.storage.p_mw[i],
+                        self.net.storage.max_e_mwh[i],
+                    )
+                    < 0.0
+                ):
+                    self.net.storage.p_mw[i] = self.min_p_mw_for_0_soc(
+                        self.net.storage.soc_percent[i], self.net.storage.max_e_mwh[i]
+                    )
             for i in self.net.storage.index:
-                if self.net.storage.soc_percent[i] > 100.:
-                    self.net.storage.soc_percent[i] = 100.
-                elif self.net.storage.soc_percent[i] < 0.:
-                    self.net.storage.soc_percent[i] = 0.
+                if self.net.storage.soc_percent[i] > 100.0:
+                    self.net.storage.soc_percent[i] = 100.0
+                elif self.net.storage.soc_percent[i] < 0.0:
+                    self.net.storage.soc_percent[i] = 0.0
         else:
             raise ValueError("Solver library not implemented")
 
     def next_soc(self, soc, p_mw, max_e_mwh):
         """Compute next SoC after 15 minutes."""
-        return soc + (p_mw * 15 / 60) / max_e_mwh * 100 - self.nue * soc * max_e_mwh * 15/60
+        return (
+            soc
+            + (p_mw * 15 / 60) / max_e_mwh * 100
+            - self.nue * soc * max_e_mwh * 15 / 60
+        )
 
     def max_p_mw_for_100_soc(self, soc, max_e_mwh):
         """Max charge power to stay below 100% SoC."""
@@ -507,13 +633,23 @@ class manager_solver:
 
             power_sgen = {}
             for i in self.net.sgen.index:
-                power_sgen[i] = np.array(self.prediction_profiles_sgen_p_noisy[i][self.step_global:self.step_global+self.horizon_length])
+                power_sgen[i] = np.array(
+                    self.prediction_profiles_sgen_p_noisy[i][
+                        self.step_global : self.step_global + self.horizon_length
+                    ]
+                )
 
             power_load = {}
             for i in self.net.load.index:
-                power_load[i] = np.array(self.prediction_profiles_load_p_noisy[i][self.step_global:self.step_global+self.horizon_length])
+                power_load[i] = np.array(
+                    self.prediction_profiles_load_p_noisy[i][
+                        self.step_global : self.step_global + self.horizon_length
+                    ]
+                )
 
-            energy_prices = self.prediction_energy_prices_noisy[self.step_global:self.step_global+self.horizon_length]
+            energy_prices = self.prediction_energy_prices_noisy[
+                self.step_global : self.step_global + self.horizon_length
+            ]
             run_solver = 1
 
             initial_soc = {}
@@ -521,7 +657,17 @@ class manager_solver:
                 if self.step == 0:
                     initial_soc[i] = self.initial_soc_sim
                 else:
-                    initial_soc[i] = max(min(self.next_soc(self.net.storage.soc_percent[i], self.net.storage.p_mw[i], self.net.storage.max_e_mwh[i]), 100.), 0.)
+                    initial_soc[i] = max(
+                        min(
+                            self.next_soc(
+                                self.net.storage.soc_percent[i],
+                                self.net.storage.p_mw[i],
+                                self.net.storage.max_e_mwh[i],
+                            ),
+                            100.0,
+                        ),
+                        0.0,
+                    )
 
             # heatpumps will be controlled in 6h blocks
             e_hp_blocks_start_global = {}
@@ -536,8 +682,12 @@ class manager_solver:
                 e_hp_profile[i] = 0
                 for t in range(e_hp_blocks_start_local[i], self.step):
                     e_hp_used[i] += self.out_load_p_mw[i][t] * 15 / 60
-                for t in range(e_hp_blocks_start_global[i], e_hp_blocks_start_global[i] + 24):
-                    e_hp_profile[i] += self.prediction_profiles_load_p_noisy[i][t] * 15 / 60
+                for t in range(
+                    e_hp_blocks_start_global[i], e_hp_blocks_start_global[i] + 24
+                ):
+                    e_hp_profile[i] += (
+                        self.prediction_profiles_load_p_noisy[i][t] * 15 / 60
+                    )
         elif self.solving_method == "no_storage":
             run_solver = 0
         else:
@@ -551,31 +701,78 @@ class manager_solver:
             # Storage power variables
             p_storage = {}
             for i in self.net.storage.index:
-                p_storage[i] = [self.solver.NumVar(-self.net.storage.max_e_mwh[i]/2/4, self.net.storage.max_e_mwh[i]/2/4, f'p_storage_index{i}_{t}') for t in range(time_steps_solver)]
+                p_storage[i] = [
+                    self.solver.NumVar(
+                        -self.net.storage.max_e_mwh[i] / 2 / 4,
+                        self.net.storage.max_e_mwh[i] / 2 / 4,
+                        f"p_storage_index{i}_{t}",
+                    )
+                    for t in range(time_steps_solver)
+                ]
             b_heatpump = {}
             for i in self.index_hp:
-                b_heatpump[i] = [self.solver.BoolVar(f"b_heatpump_index{i}_{t}") for t in range(max(time_steps_solver, 24))]
-            p_subnet = [self.solver.NumVar(-self.solver.infinity(), self.solver.infinity(), f'p_subnet_{t}') for t in range(time_steps_solver)]
-            money_spend = [self.solver.NumVar(-self.solver.infinity(), self.solver.infinity(), f'money_spend_{t}') for t in range(time_steps_solver)]
-            p_subnet_pos = [self.solver.NumVar(0, self.solver.infinity(), f'p_subnet_pos_{t}') for t in range(time_steps_solver)]
-            p_subnet_neg = [self.solver.NumVar(-self.solver.infinity(), 0, f'p_subnet_neg_{t}') for t in range(time_steps_solver)]
+                b_heatpump[i] = [
+                    self.solver.BoolVar(f"b_heatpump_index{i}_{t}")
+                    for t in range(max(time_steps_solver, 24))
+                ]
+            p_subnet = [
+                self.solver.NumVar(
+                    -self.solver.infinity(), self.solver.infinity(), f"p_subnet_{t}"
+                )
+                for t in range(time_steps_solver)
+            ]
+            money_spend = [
+                self.solver.NumVar(
+                    -self.solver.infinity(), self.solver.infinity(), f"money_spend_{t}"
+                )
+                for t in range(time_steps_solver)
+            ]
+            p_subnet_pos = [
+                self.solver.NumVar(0, self.solver.infinity(), f"p_subnet_pos_{t}")
+                for t in range(time_steps_solver)
+            ]
+            p_subnet_neg = [
+                self.solver.NumVar(-self.solver.infinity(), 0, f"p_subnet_neg_{t}")
+                for t in range(time_steps_solver)
+            ]
 
             p_storage_change = {}
             for i in self.net.storage.index:
-                p_storage_change[i] = [self.solver.NumVar(-self.solver.infinity(), self.solver.infinity(), f'p_storage_change_index{i}_{t}') for t in range(2, time_steps_solver)]
+                p_storage_change[i] = [
+                    self.solver.NumVar(
+                        -self.solver.infinity(),
+                        self.solver.infinity(),
+                        f"p_storage_change_index{i}_{t}",
+                    )
+                    for t in range(2, time_steps_solver)
+                ]
 
             # State of charge variables
             soc_storage = {}
             for i in self.net.storage.index:
-                soc_storage[i] = [self.solver.NumVar(0, 100, f"soc_index{i}_{t}") for t in range(time_steps_solver)]
+                soc_storage[i] = [
+                    self.solver.NumVar(0, 100, f"soc_index{i}_{t}")
+                    for t in range(time_steps_solver)
+                ]
 
             if self.control_heatpump:
                 # Heatpump energy consumption needs to be within a certain tolerance to the real consumption from the profiles
                 constraints_heatpump = {}
                 for i in self.index_hp:
-                    constraints_heatpump[i] = self.solver.Constraint(e_hp_profile[i]-0.51*self.max_p_mw_hp[i]*15/60-e_hp_used[i], e_hp_profile[i]+0.51*self.max_p_mw_hp[i]*15/60-e_hp_used[i])
-                    for t in range(0, e_hp_blocks_start_global[i]+24-self.step_global):
-                        constraints_heatpump[i].SetCoefficient(b_heatpump[i][t], self.max_p_mw_hp[i] * 15 / 60)
+                    constraints_heatpump[i] = self.solver.Constraint(
+                        e_hp_profile[i]
+                        - 0.51 * self.max_p_mw_hp[i] * 15 / 60
+                        - e_hp_used[i],
+                        e_hp_profile[i]
+                        + 0.51 * self.max_p_mw_hp[i] * 15 / 60
+                        - e_hp_used[i],
+                    )
+                    for t in range(
+                        0, e_hp_blocks_start_global[i] + 24 - self.step_global
+                    ):
+                        constraints_heatpump[i].SetCoefficient(
+                            b_heatpump[i][t], self.max_p_mw_hp[i] * 15 / 60
+                        )
                     # Remaining values do not necessarily need to be set, they can be minimized either way
 
             # Constraints for state of charge dynamics
@@ -592,15 +789,21 @@ class manager_solver:
                         p_subnet_without_storage += power_load[i][t]
                 for i in self.net.sgen.index:
                     p_subnet_without_storage -= power_sgen[i][t]
-                constraint_subnet = self.solver.Constraint(p_subnet_without_storage, p_subnet_without_storage)
+                constraint_subnet = self.solver.Constraint(
+                    p_subnet_without_storage, p_subnet_without_storage
+                )
                 for i in self.net.storage.index:
                     constraint_subnet.SetCoefficient(p_storage[i][t], -1)
                 if self.control_heatpump:
                     for i in self.index_hp:
-                        constraint_subnet.SetCoefficient(b_heatpump[i][t], -self.max_p_mw_hp[i])
+                        constraint_subnet.SetCoefficient(
+                            b_heatpump[i][t], -self.max_p_mw_hp[i]
+                        )
                 constraint_subnet.SetCoefficient(p_subnet[t], 1)
 
-                self.solver.Add(money_spend[t] == p_subnet[t] * energy_prices[t] * 1000 * 15 / 60)
+                self.solver.Add(
+                    money_spend[t] == p_subnet[t] * energy_prices[t] * 1000 * 15 / 60
+                )
 
                 self.solver.Add(p_subnet_pos[t] >= p_subnet[t])
                 self.solver.Add(p_subnet_neg[t] <= p_subnet[t])
@@ -608,7 +811,13 @@ class manager_solver:
             # SoC change in every step
             for i in self.net.storage.index:
                 for t in range(1, time_steps_solver):
-                    self.solver.Add(soc_storage[i][t] == soc_storage[i][t-1] + (p_storage[i][t-1] * 15 / 60) / self.net.storage.max_e_mwh[i] * 100)
+                    self.solver.Add(
+                        soc_storage[i][t]
+                        == soc_storage[i][t - 1]
+                        + (p_storage[i][t - 1] * 15 / 60)
+                        / self.net.storage.max_e_mwh[i]
+                        * 100
+                    )
 
             # Initial state of charge constraint
             if self.solving_method == "model_predictive":
@@ -616,14 +825,35 @@ class manager_solver:
                     self.solver.Add(soc_storage[i][0] == initial_soc[i])
 
             # Norm variables
-            p_subnet_normed = [self.solver.NumVar(-self.solver.infinity(), self.solver.infinity(), f'p_subnet_normed_{t}') for t in range(time_steps_solver)]
-            for t in range(time_steps_solver):
-                self.solver.Add(p_subnet_normed[t] == (p_subnet_pos[t] - p_subnet_neg[t] - self.temp_net_sum_p_mw_mean) / self.temp_net_sum_p_mw_std)
-            money_spend_normed = [self.solver.NumVar(-self.solver.infinity(), self.solver.infinity(), f'money_spend_normed_{t}') for t in range(time_steps_solver)]
+            p_subnet_normed = [
+                self.solver.NumVar(
+                    -self.solver.infinity(),
+                    self.solver.infinity(),
+                    f"p_subnet_normed_{t}",
+                )
+                for t in range(time_steps_solver)
+            ]
             for t in range(time_steps_solver):
                 self.solver.Add(
-                    money_spend_normed[t] == 4 * (money_spend[t] - self.temp_money_spend_mean) / self.temp_money_spend_std
-                    )
+                    p_subnet_normed[t]
+                    == (p_subnet_pos[t] - p_subnet_neg[t] - self.temp_net_sum_p_mw_mean)
+                    / self.temp_net_sum_p_mw_std
+                )
+            money_spend_normed = [
+                self.solver.NumVar(
+                    -self.solver.infinity(),
+                    self.solver.infinity(),
+                    f"money_spend_normed_{t}",
+                )
+                for t in range(time_steps_solver)
+            ]
+            for t in range(time_steps_solver):
+                self.solver.Add(
+                    money_spend_normed[t]
+                    == 4
+                    * (money_spend[t] - self.temp_money_spend_mean)
+                    / self.temp_money_spend_std
+                )
 
             # Objective to minimize the total cost
             objective = self.solver.Objective()
@@ -633,11 +863,13 @@ class manager_solver:
             objective.SetMinimization()
 
             # Solve the optimization problem
-            self.solver.set_time_limit(15*1000)
+            self.solver.set_time_limit(15 * 1000)
             status = self.solver.Solve()
 
             self.money_spend_sum += money_spend[0].solution_value()
-            self.p_subnet_abs_sum += p_subnet_pos[0].solution_value() - p_subnet_neg[0].solution_value()
+            self.p_subnet_abs_sum += (
+                p_subnet_pos[0].solution_value() - p_subnet_neg[0].solution_value()
+            )
 
             p_storage_solutions = {}
             p_heatpump_solutions = {}
@@ -652,7 +884,9 @@ class manager_solver:
                 for i in self.index_hp:
                     p_heatpump_solutions[i] = np.empty(shape=time_steps_solver)
                     for t in range(time_steps_solver):
-                        p_heatpump_solutions[i][t] = b_heatpump[i][t].solution_value() * self.max_p_mw_hp[i]
+                        p_heatpump_solutions[i][t] = (
+                            b_heatpump[i][t].solution_value() * self.max_p_mw_hp[i]
+                        )
             else:
                 print("ERROR: Solver had no success, status: ", status)
                 for i in self.net.storage.index:
@@ -685,26 +919,29 @@ class manager_solver:
             self.step += 1
             self.step_global = self.step + self.simulation_step_start
 
-        print("Money spent: ", self.out_money_spend_sum[-1]/100)
-        output_dir = f"results/{self.solver_library.value}/O1_{self.omega_1}andO2_{self.omega_2}"
+        print("Money spent: ", self.out_money_spend_sum[-1] / 100)
+        output_dir = (
+            f"results/{self.solver_library.value}/O1_{self.omega_1}andO2_{self.omega_2}"
+        )
         os.makedirs(output_dir, exist_ok=True)
 
-        output_data = {"out_battery_p_mw": self.out_battery_p_mw,
-                       "out_battery_soc": self.out_battery_soc,
-                       "out_pv_p_mw": self.out_pv_p_mw,
-                       "out_load_p_mw": self.out_load_p_mw,
-                       "out_bus_m_p_mw": self.out_bus_m_p_mw,
-                       "out_bus_p_mw": self.out_bus_p_mw,
-                       "out_net_sum_p_mw": self.out_net_sum_p_mw,
-                       "out_energy_prices": self.out_energy_prices,
-                       "out_money_spend": self.out_money_spend,
-                       "out_money_spend_sum": self.out_money_spend_sum,
-                       "out_res_trafo_loading_percent": self.out_res_trafo_loading_percent,
-                       "out_res_trafo_p_hv_mw": self.out_res_trafo_p_hv_mw,
-                       "out_res_trafo_p_lv_mw": self.out_res_trafo_p_lv_mw,
-                       "out_res_bus_vm_pu": self.out_res_bus_vm_pu,
-                       "out_res_line_loading": self.out_res_line_loading
-                       }
+        output_data = {
+            "out_battery_p_mw": self.out_battery_p_mw,
+            "out_battery_soc": self.out_battery_soc,
+            "out_pv_p_mw": self.out_pv_p_mw,
+            "out_load_p_mw": self.out_load_p_mw,
+            "out_bus_m_p_mw": self.out_bus_m_p_mw,
+            "out_bus_p_mw": self.out_bus_p_mw,
+            "out_net_sum_p_mw": self.out_net_sum_p_mw,
+            "out_energy_prices": self.out_energy_prices,
+            "out_money_spend": self.out_money_spend,
+            "out_money_spend_sum": self.out_money_spend_sum,
+            "out_res_trafo_loading_percent": self.out_res_trafo_loading_percent,
+            "out_res_trafo_p_hv_mw": self.out_res_trafo_p_hv_mw,
+            "out_res_trafo_p_lv_mw": self.out_res_trafo_p_lv_mw,
+            "out_res_bus_vm_pu": self.out_res_bus_vm_pu,
+            "out_res_line_loading": self.out_res_line_loading,
+        }
 
         # Final data save
         filename = (
@@ -713,7 +950,7 @@ class manager_solver:
             f"{self.noise_factor*100}percentnoise_"
             f"{self.horizon_length/4:.0f}h.pkl"
         )
-        with open(filename, 'wb') as f:
+        with open(filename, "wb") as f:
             pickle.dump(output_data, f)
         print("Saved to ", filename)
 
@@ -729,21 +966,30 @@ def get_energy_prices(year):
         Interpolated 15-minute energy prices as a NumPy array.
     """
     # Load energy prices
-    data = pd.read_csv(f'./data/{year}_spotmarket.csv', index_col=0, parse_dates=True, sep=';')
-    data.index = data.index + ' ' + data['von']
-    data.index = pd.to_datetime(data.index, format='%d.%m.%Y %H:%M')
-    data['price'] = data['Spotmarktpreis in ct/kWh']
-    data = data.drop(['von', 'Spotmarktpreis in ct/kWh', 'bis', 'Zeitzone von', 'Zeitzone bis'], axis=1)
-    data.to_csv('./data/spotmarket_reduced.csv')
-    data = pd.read_csv('./data/spotmarket_reduced.csv', index_col=0, parse_dates=True)
-    data = data[~data.index.duplicated(keep='first')]
-    data['price'] = data['price'].str.replace(',', '.').astype(float)
-    data = data.resample('15min').interpolate(method='pad')
-    data.to_csv('./data/spotmarket_reduced_quarters.csv')
-    data = pd.read_csv('./data/spotmarket_reduced_quarters.csv', index_col=0, parse_dates=True)
-    data = data[f'{year}-01-01':]  # f'{year}-12-31']
-    data.to_csv(f'./data/spotmarket_reduced_quarters_{year}.csv')
-    data = pd.read_csv(f'./data/spotmarket_reduced_quarters_{year}.csv', index_col=0, parse_dates=True)
+    data = pd.read_csv(
+        f"./data/{year}_spotmarket.csv", index_col=0, parse_dates=True, sep=";"
+    )
+    data.index = data.index + " " + data["von"]
+    data.index = pd.to_datetime(data.index, format="%d.%m.%Y %H:%M")
+    data["price"] = data["Spotmarktpreis in ct/kWh"]
+    data = data.drop(
+        ["von", "Spotmarktpreis in ct/kWh", "bis", "Zeitzone von", "Zeitzone bis"],
+        axis=1,
+    )
+    data.to_csv("./data/spotmarket_reduced.csv")
+    data = pd.read_csv("./data/spotmarket_reduced.csv", index_col=0, parse_dates=True)
+    data = data[~data.index.duplicated(keep="first")]
+    data["price"] = data["price"].str.replace(",", ".").astype(float)
+    data = data.resample("15min").interpolate(method="pad")
+    data.to_csv("./data/spotmarket_reduced_quarters.csv")
+    data = pd.read_csv(
+        "./data/spotmarket_reduced_quarters.csv", index_col=0, parse_dates=True
+    )
+    data = data[f"{year}-01-01":]  # f'{year}-12-31']
+    data.to_csv(f"./data/spotmarket_reduced_quarters_{year}.csv")
+    data = pd.read_csv(
+        f"./data/spotmarket_reduced_quarters_{year}.csv", index_col=0, parse_dates=True
+    )
     # data['price'].plot(title='Original Price Data')
     energy_prices = data["price"].to_numpy()
     return energy_prices
@@ -755,49 +1001,125 @@ def main():
     if debug:
         net = sb.get_simbench_net("1-LV-rural1--1-sw")
         energy_prices = get_energy_prices(2016)
-        human_preference = HumanPreference(horizon_length=int(96/1), omega_1=0.5, omega_2=0.5, pywraplp_solver="CBC", initial_soc_solver=50, target_soc_solver=50, initial_soc_sim=50, solving_method="no_storage", noise_percent=0)
-        instance = manager_solver(solver_library=solver_library.pywraplp,
-                                  net=net,
-                                  simulation_steps=96*7,
-                                  # 7584, #7104, #10080,
-                                  simulation_step_start=7104,
-                                  energy_prices=energy_prices,
-                                  human_preference=human_preference)
+        human_preference = HumanPreference(
+            horizon_length=int(96 / 1),
+            omega_1=0.5,
+            omega_2=0.5,
+            pywraplp_solver="CBC",
+            initial_soc_solver=50,
+            target_soc_solver=50,
+            initial_soc_sim=50,
+            solving_method="no_storage",
+            noise_percent=0,
+        )
+        instance = manager_solver(
+            solver_library=solver_library.pywraplp,
+            net=net,
+            simulation_steps=96 * 7,
+            # 7584, #7104, #10080,
+            simulation_step_start=7104,
+            energy_prices=energy_prices,
+            human_preference=human_preference,
+        )
         instance.simulate()
     else:
         # Create the parser
         parser = argparse.ArgumentParser(description="Solver Manager")
 
-        parser.add_argument('--solver_library', type=str, choices=["pywraplp", "pyomo"],
-                            help='Library to use for solving', required=True)
-        parser.add_argument('--simulation_step_start', type=int,
-                            help='Simulation step index to start at', required=True)
-        parser.add_argument('--simulation_steps', type=int,
-                            help='Number of simulation time steps (each = 15 min)', required=True)
-        parser.add_argument('--horizon_length', type=int,
-                            help='Number of time steps in the solver horizon', required=True)
-        parser.add_argument('--noise_percent', type=int,
-                            help='Percentage of noise to add to load/generation profiles', required=True)
-        parser.add_argument('--initial_soc_solver', type=int, choices=range(0, 100), default=50,
-                            help='SoC the solver will assume at the beginning of each horizon')
-        parser.add_argument('--initial_soc_sim', type=int, choices=range(0, 100), default=50,
-                            help='SoC of storages at the beginning of the entire simulation')
-        parser.add_argument('--target_soc_solver', type=int, choices=range(0, 100), default=50,
-                            help='SoC the solver will aim for at the end of each horizon')
-        parser.add_argument('--omega_1', type=float, default=0.5,
-                            help='Weighting factor omega_1 for the optimization objective (default=0.5)')
-        parser.add_argument('--omega_2', type=float, default=0.5,
-                            help='Weighting factor omega_2 for the optimization objective (default=0.5)')
-        parser.add_argument('--pywraplp_solver', type=str, default="CBC",
-                            help='Solver name when solver_library=pywraplp (e.g. "CBC", "SCIP")')
-        parser.add_argument('--solving_method', type=str, default="model_predictive",
-                            help='Which solving method to use (e.g. "rule_based", "model_predictive")')
-        parser.add_argument('--transformer_limit_enabled', default=False, type=lambda x: (str(x).lower() == 'true'),
-                            help='Whether to enable the transformer limit constraint (only for nonlinear MPC) [True, False]')
-        parser.add_argument('--transformer_limit_percentage', type=float, default=100,
-                            help='Transformer limit (%) for nonlinear MPC (used if transformer_limit_enabled=True)')
-        parser.add_argument('--energy_price_year', type=int, default=2024,
-                            help='Year of energy price data (from data/{year}_spotmarket.csv')
+        parser.add_argument(
+            "--solver_library",
+            type=str,
+            choices=["pywraplp", "pyomo"],
+            help="Library to use for solving",
+            required=True,
+        )
+        parser.add_argument(
+            "--simulation_step_start",
+            type=int,
+            help="Simulation step index to start at",
+            required=True,
+        )
+        parser.add_argument(
+            "--simulation_steps",
+            type=int,
+            help="Number of simulation time steps (each = 15 min)",
+            required=True,
+        )
+        parser.add_argument(
+            "--horizon_length",
+            type=int,
+            help="Number of time steps in the solver horizon",
+            required=True,
+        )
+        parser.add_argument(
+            "--noise_percent",
+            type=int,
+            help="Percentage of noise to add to load/generation profiles",
+            required=True,
+        )
+        parser.add_argument(
+            "--initial_soc_solver",
+            type=int,
+            choices=range(0, 100),
+            default=50,
+            help="SoC the solver will assume at the beginning of each horizon",
+        )
+        parser.add_argument(
+            "--initial_soc_sim",
+            type=int,
+            choices=range(0, 100),
+            default=50,
+            help="SoC of storages at the beginning of the entire simulation",
+        )
+        parser.add_argument(
+            "--target_soc_solver",
+            type=int,
+            choices=range(0, 100),
+            default=50,
+            help="SoC the solver will aim for at the end of each horizon",
+        )
+        parser.add_argument(
+            "--omega_1",
+            type=float,
+            default=0.5,
+            help="Weighting factor omega_1 for the optimization objective (default=0.5)",
+        )
+        parser.add_argument(
+            "--omega_2",
+            type=float,
+            default=0.5,
+            help="Weighting factor omega_2 for the optimization objective (default=0.5)",
+        )
+        parser.add_argument(
+            "--pywraplp_solver",
+            type=str,
+            default="CBC",
+            help='Solver name when solver_library=pywraplp (e.g. "CBC", "SCIP")',
+        )
+        parser.add_argument(
+            "--solving_method",
+            type=str,
+            default="model_predictive",
+            help='Which solving method to use (e.g. "rule_based", "model_predictive")',
+        )
+        parser.add_argument(
+            "--transformer_limit_enabled",
+            default=False,
+            type=lambda x: (str(x).lower() == "true"),
+            help="Whether to enable the transformer limit constraint (only for nonlinear MPC) [True, False]",
+        )
+        parser.add_argument(
+            "--transformer_limit_percentage",
+            type=float,
+            default=100,
+            help="Transformer limit (%) for nonlinear MPC (used if transformer_limit_enabled=True)",
+        )
+        parser.add_argument(
+            "--energy_price_year",
+            type=int,
+            default=2024,
+            help="Year of energy price data (from data/{year}_spotmarket.csv",
+        )
 
         args = parser.parse_args()
 
@@ -827,7 +1149,9 @@ def main():
             print("pyomo_solver:        IPOPT")
             print(f"transformer_limit_enabled: {args.transformer_limit_enabled}")
             if args.transformer_limit_enabled:
-                print(f"transformer_limit_percentage: {args.transformer_limit_percentage}")
+                print(
+                    f"transformer_limit_percentage: {args.transformer_limit_percentage}"
+                )
         print(f"energy price year:         {args.energy_price_year}")
         print("====================================")
 
@@ -842,7 +1166,7 @@ def main():
             target_soc_solver=args.target_soc_solver,
             initial_soc_sim=args.initial_soc_sim,
             solving_method=args.solving_method,
-            noise_percent=args.noise_percent
+            noise_percent=args.noise_percent,
         )
 
         start = time.time()
